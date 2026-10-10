@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Polymaths Insights</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #0f172a;
+            color: #f8fafc;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+        }
+
+        header {
+            text-align: center;
+            margin-top: 1.5rem;
+            z-index: 10;
+            flex-shrink: 0;
+        }
+
+        h1 {
+            font-size: 2.2rem;
+            font-weight: 300;
+            margin: 0;
+            background: -webkit-linear-gradient(45deg, #38bdf8, #818cf8, #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: 2px;
+        }
+
+        .tabs {
+            margin-top: 1rem;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 0.5rem;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 0.5rem;
+            border-radius: 99px;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+            max-width: 90vw;
+        }
+
+        .tab-btn {
+            background: transparent;
+            color: #94a3b8;
+            border: none;
+            padding: 0.4rem 1rem;
+            border-radius: 99px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.3s ease;
+        }
+
+        .tab-btn.active {
+            background: #38bdf8;
+            color: #0f172a;
+            font-weight: 600;
+            box-shadow: 0 4px 10px rgba(56, 189, 248, 0.4);
+        }
+
+        .view-container {
+            width: 100%;
+            flex: 1;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            padding: 1rem;
+            box-sizing: border-box;
+            position: relative;
+        }
+
+        .view-container.active {
+            display: flex;
+        }
+
+        /* Scrolling containers */
+        .scroll-container {
+            flex-direction: column;
+            justify-content: flex-start;
+            overflow-y: auto;
+            max-width: 1200px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 1rem 2rem;
+        }
+
+        .scroll-container::-webkit-scrollbar { width: 8px; }
+        .scroll-container::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); }
+        .scroll-container::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+
+        /* Intro Layout specific styles */
+        .intro-hero {
+            text-align: center;
+            max-width: 800px;
+            margin: 0 auto 3rem auto;
+            animation: fadeInDown 1s ease-out;
+        }
+        .intro-hero h2 { font-size: 2.5rem; font-weight: 200; margin-bottom: 1rem; color: #f8fafc; }
+        .intro-hero p { font-size: 1.1rem; line-height: 1.8; color: #94a3b8; font-weight: 300; }
+        .stats-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem; width: 100%; margin-bottom: 3rem; animation: fadeInUp 1s ease-out 0.2s both;
+        }
+        .stat-card {
+            background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px; padding: 2rem; text-align: center; backdrop-filter: blur(10px);
+        }
+        .stat-number {
+            font-size: 3rem; font-weight: 200; margin-bottom: 0.5rem;
+            background: -webkit-linear-gradient(45deg, #38bdf8, #c084fc);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .stat-label { color: #94a3b8; text-transform: uppercase; letter-spacing: 2px; font-size: 0.8rem; }
+        .timeline-section {
+            width: 100%; background: rgba(15, 23, 42, 0.5); border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 20px; padding: 2rem; box-sizing: border-box; animation: fadeInUp 1s ease-out 0.4s both;
+        }
+        .timeline-section h3 { margin-top: 0; font-weight: 300; color: #cbd5e1; margin-bottom: 1rem; text-align: center; }
+        #timeline-chart { width: 100%; height: 300px; }
+
+        @keyframes fadeInDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* SVG chart containers */
+        svg { width: 100%; height: 100%; max-width: 1000px; }
+
+        .tooltip {
+            position: absolute; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.15); color: #f8fafc; padding: 1rem; border-radius: 12px;
+            pointer-events: none; opacity: 0; transition: opacity 0.2s ease; box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            font-size: 0.875rem; max-width: 350px; z-index: 20;
+        }
+        .tooltip h3 { margin: 0 0 0.5rem 0; font-size: 1.1rem; color: #38bdf8; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.25rem; }
+        .tooltip .badge {
+            display: inline-block; background: rgba(255,255,255,0.1); padding: 0.2rem 0.5rem;
+            border-radius: 4px; margin-bottom: 0.5rem; font-size: 0.75rem; letter-spacing: 0.5px; text-transform: uppercase;
+        }
+        .tooltip ul { margin: 0; padding-left: 1rem; color: #cbd5e1; }
+
+        /* List Layouts */
+        .grid-layout {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 1.5rem;
+            width: 100%;
+            padding-bottom: 2rem;
+        }
+        .list-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 12px;
+            padding: 1.5rem;
+            transition: transform 0.2s, background 0.2s;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        .list-card:hover {
+            transform: translateY(-3px);
+            background: rgba(255,255,255,0.06);
+        }
+        .list-card-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .polymath-img {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            object-fit: cover;
+            background: rgba(255,255,255,0.1);
+            border: 2px solid #38bdf8;
+            flex-shrink: 0;
+        }
+        .list-card-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #f8fafc;
+            margin: 0;
+        }
+        .list-card-subtitle {
+            font-size: 0.85rem;
+            color: #94a3b8;
+            margin: 0.2rem 0 0 0;
+        }
+        .list-card-bio {
+            font-size: 0.9rem;
+            color: #cbd5e1;
+            line-height: 1.5;
+            display: -webkit-box;
+            -webkit-line-clamp: 5;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            flex: 1;
+        }
+        .list-card-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+        }
+        .tag {
+            background: rgba(56, 189, 248, 0.15);
+            color: #38bdf8;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+        }
+        
+        .discipline-title {
+            font-size: 1.4rem;
+            color: #c084fc;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 0.5rem;
+        }
+
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>The Interconnected Minds</h1>
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('intro')">Introduction</button>
+            <button class="tab-btn" onclick="switchTab('grand')">Grand Chord</button>
+            <button class="tab-btn" onclick="switchTab('polymaths-list')">Polymaths List</button>
+            <button class="tab-btn" onclick="switchTab('disciplines-list')">Disciplines List</button>
+            <button class="tab-btn" onclick="switchTab('disciplines')">Disciplines Chord</button>
+            <button class="tab-btn" onclick="switchTab('polymaths')">Polymath Chord</button>
+            <button class="tab-btn" onclick="switchTab('countries')">Country Chord</button>
+            <button class="tab-btn" onclick="switchTab('methodology')">Methodology</button>
+        </div>
+    </header>
+
+    <!-- INTRO TAB -->
+    <div id="intro-container" class="view-container scroll-container active">
+        <div class="intro-hero">
+            <h2>A Mind Unbound by Boundaries</h2>
+            <p>
+                Throughout history, a rare group of individuals has traversed the vast, uncharted landscapes of human knowledge. They refused to be confined to a single discipline—merging the logical with the lyrical, the scientific with the philosophical, and the ancient with the visionary. 
+            </p>
+            <p>
+                This visual exploration maps the complex webs of their intellect. By tracing the overlaps between their areas of expertise, their countries of origin, and their eras, we reveal the hidden architecture of genius.
+            </p>
+        </div>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number" id="stat-polymaths">0</div>
+                <div class="stat-label">Polymaths</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="stat-disciplines">0</div>
+                <div class="stat-label">Unique Disciplines</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="stat-countries">0</div>
+                <div class="stat-label">Countries of Origin</div>
+            </div>
+        </div>
+        <div class="timeline-section">
+            <h3>Polymaths Through the Centuries</h3>
+            <div id="timeline-chart"></div>
+        </div>
+    </div>
+
+    <!-- POLYMATHS LIST TAB -->
+    <div id="polymaths-list-container" class="view-container scroll-container">
+        <div class="grid-layout" id="polymaths-grid"></div>
+    </div>
+
+    <!-- DISCIPLINES LIST TAB -->
+    <div id="disciplines-list-container" class="view-container scroll-container">
+        <div class="grid-layout" id="disciplines-grid"></div>
+    </div>
+
+    <!-- METHODOLOGY TAB -->
+    <div id="methodology-container" class="view-container scroll-container">
+        <div class="intro-hero" style="text-align: left; max-width: 800px; margin: 0 auto; animation: fadeInUp 0.8s ease-out;">
+            <h2 style="text-align: center; margin-bottom: 2rem;">Methodology</h2>
+            
+            <p style="color: #cbd5e1; line-height: 1.8; font-size: 1.05rem;">
+                I asked Gemini, ChatGPT, Co Pilot, Grok, Indus (Sarvam), Claude, Deep Seek, and Perplexity the same question:
+            </p>
+            
+            <blockquote style="background: rgba(255,255,255,0.05); padding: 2rem; border-left: 4px solid #38bdf8; border-radius: 8px; margin: 2rem 0; color: #94a3b8; font-style: italic; line-height: 1.8;">
+                "1. Using the all the responses come up with a list of all the areas of knowledge. While doing this don’t go with just the names used - it is possible that some AI might have used a different name for the same area of knowledge compared to another AI. So, look deeper while coming up with the list.<br><br>
+                2. Once you have that list, come up with a list of all the polymaths mentioned and map them to the areas of knowledge you compiled above. Again, while compiling these names, make a deeper analysis - it is possible that the same name got spelled differently in the answers given by different AIs.<br><br>
+                3. Using the outputs of the above two steps, create a new table with the following columns:<br>
+                &nbsp;&nbsp;a. Name of the polymath<br>
+                &nbsp;&nbsp;b. Country of his origin<br>
+                &nbsp;&nbsp;c. Time period of his life<br>
+                &nbsp;&nbsp;d. The areas of knowledge that he involved in.<br><br>
+                4. Present the table that you created in a very simple, easy to read and understandable format"
+            </blockquote>
+            
+            <p style="color: #cbd5e1; line-height: 1.8; font-size: 1.05rem;">
+                Then I used Gemini to collate and concord the answers given. The output of this was a CSV file that had the following columns:
+            </p>
+            
+            <div style="background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(255,255,255,0.1); padding: 1rem; border-radius: 8px; text-align: center; font-family: monospace; font-size: 1.1rem; color: #c084fc; margin: 2rem 0;">
+                Name, Areas of Contribution
+            </div>
+            
+            <p style="color: #cbd5e1; line-height: 1.8; font-size: 1.05rem; text-align: center; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 2rem;">
+                This CSV file was used for creating this visualization with the help of Antigravity.
+            </p>
+        </div>
+    </div>
+
+    <!-- CHARTS TAB -->
+    <div id="chart-container" class="view-container">
+        <div class="tooltip" id="tooltip"></div>
+    </div>
+
+    <script>
+        const chartContainer = document.getElementById('chart-container');
+        const containers = {
+            'intro': document.getElementById('intro-container'),
+            'polymaths-list': document.getElementById('polymaths-list-container'),
+            'disciplines-list': document.getElementById('disciplines-list-container'),
+            'methodology': document.getElementById('methodology-container')
+        };
+        const tooltip = d3.select("#tooltip");
+        let currentData = [];
+        let listsRendered = false;
+
+        d3.csv("Polymaths.csv").then(data => {
+            currentData = data;
+            populateIntroStats();
+            drawIntroTimeline();
+        });
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            // Hide all
+            Object.values(containers).forEach(c => c.classList.remove('active'));
+            chartContainer.classList.remove('active');
+
+            if (containers[tabId]) {
+                containers[tabId].classList.add('active');
+                if ((tabId === 'polymaths-list' || tabId === 'disciplines-list') && !listsRendered) {
+                    renderLists();
+                    listsRendered = true;
+                }
+            } else {
+                chartContainer.classList.add('active');
+                d3.select("#chart-container svg").remove();
+                if (tabId === 'disciplines') drawDisciplinesChart();
+                else if (tabId === 'grand') drawGrandViewChart();
+                else if (tabId === 'polymaths') drawPolymathsChart();
+                else if (tabId === 'countries') drawCountriesChart();
+            }
+        }
+
+        // ================= WIKIPEDIA API & LISTS =================
+        async function fetchWikiBio(name) {
+            let queryName = name;
+            // Manual overrides for better Wiki matching
+            if (name === "Ibn Sina (Avicenna)") queryName = "Avicenna";
+            if (name === "S. Radhakrishnan") queryName = "Sarvepalli_Radhakrishnan";
+            if (name === "Al-Biruni") queryName = "Al-Biruni";
+            
+            try {
+                const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(queryName)}`);
+                if(!res.ok) throw new Error();
+                const data = await res.json();
+                return {
+                    extract: data.extract || 'Biography not available.',
+                    thumbnail: data.thumbnail ? data.thumbnail.source : 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60"><rect width="100%" height="100%" fill="%231e293b"/><text x="50%" y="50%" fill="%23475569" font-size="12" text-anchor="middle" dy=".3em">No Img</text></svg>'
+                };
+            } catch(e) {
+                return {
+                    extract: 'Biography could not be fetched from Wikipedia.',
+                    thumbnail: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60"><rect width="100%" height="100%" fill="%231e293b"/><text x="50%" y="50%" fill="%23475569" font-size="12" text-anchor="middle" dy=".3em">No Img</text></svg>'
+                };
+            }
+        }
+
+        function renderLists() {
+            const polyGrid = document.getElementById('polymaths-grid');
+            const discGrid = document.getElementById('disciplines-grid');
+            
+            const disciplinesMap = new Map();
+
+            currentData.forEach((row, i) => {
+                const name = row["Name of the Polymath"];
+                if(!name) return;
+                const country = row["Country of Origin"];
+                const period = row["Time Period"];
+                const areas = row["Areas of Knowledge"].split(",").map(a => a.trim());
+
+                // Build polymath card
+                const pCard = document.createElement('div');
+                pCard.className = 'list-card';
+                pCard.innerHTML = `
+                    <div class="list-card-header">
+                        <img class="polymath-img" id="img-${i}" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='60' height='60'><rect width='100%' height='100%' fill='%231e293b'/></svg>" />
+                        <div>
+                            <h3 class="list-card-title">${name}</h3>
+                            <p class="list-card-subtitle">${country} • ${period}</p>
+                        </div>
+                    </div>
+                    <div class="list-card-bio" id="bio-${i}">Loading biography...</div>
+                    <div class="list-card-tags">
+                        ${areas.map(a => `<span class="tag">${a}</span>`).join('')}
+                    </div>
+                `;
+                polyGrid.appendChild(pCard);
+
+                // Fetch data asynchronously
+                fetchWikiBio(name).then(bioData => {
+                    document.getElementById(`img-${i}`).src = bioData.thumbnail;
+                    document.getElementById(`bio-${i}`).textContent = bioData.extract;
+                });
+
+                // Aggregate disciplines
+                areas.forEach(a => {
+                    if(!disciplinesMap.has(a)) disciplinesMap.set(a, []);
+                    disciplinesMap.get(a).push(name);
+                });
+            });
+
+            // Build disciplines list
+            const sortedDisciplines = Array.from(disciplinesMap.keys()).sort();
+            sortedDisciplines.forEach(disc => {
+                const polymaths = disciplinesMap.get(disc);
+                const dCard = document.createElement('div');
+                dCard.className = 'list-card';
+                dCard.innerHTML = `
+                    <h3 class="discipline-title" style="margin:0">${disc}</h3>
+                    <p style="margin:0; color:#94a3b8; font-size:0.85rem">${polymaths.length} Polymaths</p>
+                    <div class="list-card-tags" style="margin-top:0.5rem">
+                        ${polymaths.map(p => `<span class="tag" style="background:rgba(192, 132, 252, 0.15); color:#c084fc">${p}</span>`).join('')}
+                    </div>
+                `;
+                discGrid.appendChild(dCard);
+            });
+        }
+
+        // ================= INTRO UTILS =================
+        function parseMidYear(periodStr) {
+            if(!periodStr) return null;
+            const isBCE = periodStr.includes("BCE") || periodStr.includes("BC");
+            const matches = periodStr.match(/\d+/g);
+            if(!matches || matches.length === 0) return null;
+            let avgYear = matches.map(Number).reduce((a,b) => a+b, 0) / matches.length;
+            if (isBCE) avgYear = -avgYear;
+            return avgYear;
+        }
+
+        function getCentury(year) {
+            if (year < 0) return `-${Math.ceil(Math.abs(year) / 100)}`;
+            return `${Math.ceil(year / 100)}`;
+        }
+
+        function formatCenturyLabel(cStr) {
+            const c = parseInt(cStr);
+            if(c < 0) return `${Math.abs(c)}th C. BCE`;
+            return `${c}th C. CE`;
+        }
+
+        function populateIntroStats() {
+            const polymathCount = currentData.length;
+            const disciplinesSet = new Set();
+            const countriesSet = new Set();
+            currentData.forEach(row => {
+                if(row["Areas of Knowledge"]) row["Areas of Knowledge"].split(",").forEach(a => disciplinesSet.add(a.trim()));
+                if(row["Country of Origin"]) row["Country of Origin"].split("/").forEach(c => countriesSet.add(c.trim()));
+            });
+            d3.select("#stat-polymaths").transition().duration(1500).tween("text", function() {
+                const i = d3.interpolateRound(0, polymathCount); return function(t) { this.textContent = i(t); };
+            });
+            d3.select("#stat-disciplines").transition().duration(1500).tween("text", function() {
+                const i = d3.interpolateRound(0, disciplinesSet.size); return function(t) { this.textContent = i(t); };
+            });
+            d3.select("#stat-countries").transition().duration(1500).tween("text", function() {
+                const i = d3.interpolateRound(0, countriesSet.size); return function(t) { this.textContent = i(t); };
+            });
+        }
+
+        function drawIntroTimeline() {
+            const centuriesMap = new Map();
+            currentData.forEach(row => {
+                const midYear = parseMidYear(row["Time Period"]);
+                if(midYear !== null) {
+                    const century = parseInt(getCentury(midYear));
+                    centuriesMap.set(century, (centuriesMap.get(century) || 0) + 1);
+                }
+            });
+            let centuriesData = Array.from(centuriesMap.keys());
+            if(centuriesData.length === 0) return;
+            const minC = Math.min(...centuriesData), maxC = Math.max(...centuriesData);
+            const timelineData = [];
+            for(let c = minC; c <= maxC; c++) {
+                if(c === 0) continue;
+                timelineData.push({ century: c, count: centuriesMap.get(c) || 0 });
+            }
+            const container = document.getElementById("timeline-chart");
+            const width = container.clientWidth, height = container.clientHeight, margin = {top: 20, right: 30, bottom: 40, left: 40};
+            const svg = d3.select("#timeline-chart").append("svg").attr("width", width).attr("height", height).attr("viewBox", [0, 0, width, height]);
+            
+            const gradient = svg.append("defs").append("linearGradient").attr("id", "area-gradient").attr("x1", "0%").attr("y1", "0%").attr("x2", "0%").attr("y2", "100%");
+            gradient.append("stop").attr("offset", "0%").attr("stop-color", "#38bdf8").attr("stop-opacity", 0.5);
+            gradient.append("stop").attr("offset", "100%").attr("stop-color", "#818cf8").attr("stop-opacity", 0);
+
+            const x = d3.scaleLinear().domain([minC, maxC]).range([margin.left, width - margin.right]);
+            const y = d3.scaleLinear().domain([0, d3.max(timelineData, d => d.count) + 1]).range([height - margin.bottom, margin.top]);
+
+            svg.append("g").attr("transform", `translate(0,${height - margin.bottom})`)
+                .call(d3.axisBottom(x).ticks(10).tickFormat(d => formatCenturyLabel(d)))
+                .call(g => g.select(".domain").attr("stroke", "rgba(255,255,255,0.2)")).call(g => g.selectAll(".tick line").attr("stroke", "rgba(255,255,255,0.2)")).call(g => g.selectAll(".tick text").attr("fill", "#94a3b8"));
+            svg.append("g").attr("transform", `translate(${margin.left},0)`)
+                .call(d3.axisLeft(y).ticks(5).tickFormat(d3.format("d")))
+                .call(g => g.select(".domain").attr("stroke", "rgba(255,255,255,0.2)")).call(g => g.selectAll(".tick line").attr("stroke", "rgba(255,255,255,0.2)")).call(g => g.selectAll(".tick text").attr("fill", "#94a3b8"));
+
+            const area = d3.area().curve(d3.curveMonotoneX).x(d => x(d.century)).y0(y(0)).y1(d => y(d.count));
+            const line = d3.line().curve(d3.curveMonotoneX).x(d => x(d.century)).y(d => y(d.count));
+            svg.append("path").datum(timelineData).attr("fill", "url(#area-gradient)").attr("d", area).attr("opacity", 0).transition().duration(1500).attr("opacity", 1);
+            const pathLine = svg.append("path").datum(timelineData).attr("fill", "none").attr("stroke", "#38bdf8").attr("stroke-width", 3).attr("d", line);
+            const totalLength = pathLine.node().getTotalLength();
+            pathLine.attr("stroke-dasharray", totalLength + " " + totalLength).attr("stroke-dashoffset", totalLength).transition().duration(2000).ease(d3.easeCubicInOut).attr("stroke-dashoffset", 0);
+
+            const tlTooltip = d3.select("body").append("div").attr("class", "tooltip").style("position", "absolute").style("pointer-events", "none").style("opacity", 0);
+            svg.append("g").selectAll("circle").data(timelineData.filter(d => d.count > 0)).join("circle")
+                .attr("cx", d => x(d.century)).attr("cy", d => y(d.count)).attr("r", 0).attr("fill", "#0f172a").attr("stroke", "#c084fc").attr("stroke-width", 2)
+                .on("mouseover", function(event, d) {
+                    d3.select(this).attr("r", 8).attr("fill", "#c084fc");
+                    tlTooltip.html(`<strong>${formatCenturyLabel(d.century)}</strong><br>${d.count} Polymath${d.count > 1 ? 's' : ''}`).style("left", (event.pageX + 15) + "px").style("top", (event.pageY - 28) + "px").style("opacity", 1);
+                }).on("mouseout", function() { d3.select(this).attr("r", 5).attr("fill", "#0f172a"); tlTooltip.style("opacity", 0); })
+                .transition().delay((d, i) => i * 100).duration(500).attr("r", 5);
+        }
+
+        // ================= SHARED CHORD UTILS =================
+        function getColors(count) {
+            const colors = ["#ef4444", "#f97316", "#f59e0b", "#eab308", "#84cc16", "#22c55e", "#10b981", "#14b8a6", "#06b6d4", "#0ea5e9", "#3b82f6", "#6366f1", "#8b5cf6", "#a855f7", "#d946ef", "#ec4899"];
+            while (colors.length < count) colors.push(d3.interpolateRainbow(Math.random()));
+            return colors;
+        }
+
+        function drawChord(matrix, nodes, colorScale, tooltipCallback) {
+            const width = 1000, height = 1000, innerRadius = Math.min(width, height) * 0.5 - 150, outerRadius = innerRadius + 20;
+            const svg = d3.select("#chart-container").append("svg").attr("viewBox", [-width / 2, -height / 2, width, height]);
+            const chord = d3.chord().padAngle(0.04).sortSubgroups(d3.descending)(matrix);
+            const arc = d3.arc().innerRadius(innerRadius).outerRadius(outerRadius);
+            const ribbon = d3.ribbon().radius(innerRadius - 2);
+            const group = svg.append("g").selectAll("g").data(chord.groups).join("g");
+            group.append("path").attr("fill", d => colorScale(nodes[d.index].name || nodes[d.index])).attr("d", arc).style("opacity", 0.8)
+                .on("mouseover", function(event, d) { d3.selectAll(".chord-ribbon").style("opacity", r => r.source.index === d.index || r.target.index === d.index ? 0.8 : 0.05); d3.select(this).style("opacity", 1); })
+                .on("mouseout", function() { d3.selectAll(".chord-ribbon").style("opacity", 0.6); d3.select(this).style("opacity", 0.8); });
+            group.append("text").each(d => { d.angle = (d.startAngle + d.endAngle) / 2; }).attr("dy", "0.35em")
+                .attr("transform", d => `rotate(${(d.angle * 180 / Math.PI - 90)}) translate(${outerRadius + 10}) ${d.angle > Math.PI ? "rotate(180)" : ""}`)
+                .attr("text-anchor", d => d.angle > Math.PI ? "end" : "start").text(d => nodes[d.index].name || nodes[d.index])
+                .style("font-size", d => nodes.length > 20 ? "10px" : "12px").style("fill", "#cbd5e1").style("font-weight", "500");
+            svg.append("g").attr("fill-opacity", 0.6).selectAll("path").data(chord).join("path").attr("class", "chord-ribbon").attr("d", ribbon)
+                .attr("fill", d => colorScale(nodes[d.source.index].name || nodes[d.source.index])).style("mix-blend-mode", "screen")
+                .on("mousemove", function(event, d) { d3.select(this).style("opacity", 1); tooltipCallback(event, d, nodes); })
+                .on("mouseout", function() { d3.select(this).style("opacity", 0.6); tooltip.style("opacity", 0); })
+                .attr("transform", "scale(0)").transition().duration(800).ease(d3.easeElasticOut).attr("transform", "scale(1)");
+        }
+
+        // ================= CHORD CHART FUNCTIONS =================
+        function drawDisciplinesChart() {
+            const disciplinesSet = new Set();
+            const overlapInfo = {}; 
+            currentData.forEach(row => {
+                if(!row["Areas of Knowledge"]) return;
+                const areas = row["Areas of Knowledge"].split(",").map(a => a.trim()), name = row["Name of the Polymath"];
+                areas.forEach(a => disciplinesSet.add(a));
+                for (let i = 0; i < areas.length; i++) {
+                    for (let j = i + 1; j < areas.length; j++) {
+                        const key = [areas[i], areas[j]].sort().join("::");
+                        if (!overlapInfo[key]) overlapInfo[key] = [];
+                        overlapInfo[key].push(name);
+                    }
+                }
+            });
+            const disciplines = Array.from(disciplinesSet).sort(), color = d3.scaleOrdinal().domain(disciplines).range(getColors(disciplines.length));
+            const matrix = Array.from({length: disciplines.length}, () => new Array(disciplines.length).fill(0));
+            currentData.forEach(row => {
+                if(!row["Areas of Knowledge"]) return;
+                const areas = row["Areas of Knowledge"].split(",").map(a => a.trim());
+                for(let i=0; i<areas.length; i++)
+                    for(let j=0; j<areas.length; j++)
+                        if(i !== j) matrix[disciplines.indexOf(areas[i])][disciplines.indexOf(areas[j])] += 1;
+            });
+            drawChord(matrix, disciplines, color, (event, d, nodes) => {
+                const d1 = nodes[d.source.index], d2 = nodes[d.target.index], polymaths = overlapInfo[[d1, d2].sort().join("::")] || [];
+                const listHtml = polymaths.slice(0, 5).map(p => `<li>${p}</li>`).join(""), moreHtml = polymaths.length > 5 ? `<li><em>+${polymaths.length - 5} more</em></li>` : "";
+                tooltip.html(`<div class="badge">Discipline Overlap</div><h3>${d1} ↔ ${d2}</h3><p style="margin-bottom:0.5rem; color:#94a3b8">Shared by ${polymaths.length} polymaths:</p><ul>${listHtml}${moreHtml}</ul>`).style("left", (event.pageX + 15) + "px").style("top", (event.pageY + 15) + "px").style("opacity", 1);
+            });
+        }
+
+        function drawGrandViewChart() {
+            const width = 1100, height = 1100, innerRadius = Math.min(width, height) * 0.5 - 200, outerRadius = innerRadius + 15;
+            const svg = d3.select("#chart-container").append("svg").attr("viewBox", [-width/2, -height/2, width, height]);
+            const nodes = [], nodeMap = new Map();
+            function addNode(name, type) { if (!nodeMap.has(name)) { nodeMap.set(name, nodes.length); nodes.push({ name, type }); } return nodeMap.get(name); }
+            const typeColors = { "Polymath": "#38bdf8", "Country": "#f43f5e", "Period": "#f59e0b", "Area": "#10b981" };
+            
+            // Build nodes mapping
+            currentData.forEach(row => {
+                if(!row["Name of the Polymath"]) return;
+                addNode(row["Name of the Polymath"], "Polymath");
+                if(row["Country of Origin"]) addNode(row["Country of Origin"], "Country");
+                if(row["Time Period"]) addNode(row["Time Period"], "Period");
+                if(row["Areas of Knowledge"]) row["Areas of Knowledge"].split(",").map(a=>a.trim()).forEach(a => addNode(a, "Area"));
+            });
+            
+            const matrix = Array.from({length: nodes.length}, () => new Array(nodes.length).fill(0));
+            
+            // Build connections (Full Cross-Linking)
+            currentData.forEach(row => {
+                if(!row["Name of the Polymath"]) return;
+                const pIdx = nodeMap.get(row["Name of the Polymath"]);
+                const cIdx = row["Country of Origin"] ? nodeMap.get(row["Country of Origin"]) : -1;
+                const tIdx = row["Time Period"] ? nodeMap.get(row["Time Period"]) : -1;
+                const aIdxs = row["Areas of Knowledge"] ? row["Areas of Knowledge"].split(",").map(a=>nodeMap.get(a.trim())) : [];
+                
+                // Polymath to everything
+                if(cIdx !== -1) { matrix[pIdx][cIdx] += 1; matrix[cIdx][pIdx] += 1; }
+                if(tIdx !== -1) { matrix[pIdx][tIdx] += 1; matrix[tIdx][pIdx] += 1; }
+                aIdxs.forEach(aIdx => { matrix[pIdx][aIdx] += 1; matrix[aIdx][pIdx] += 1; });
+                
+                // Cross links for Country <-> Period <-> Area
+                aIdxs.forEach(aIdx => {
+                    if(cIdx !== -1) { matrix[aIdx][cIdx] += 1; matrix[cIdx][aIdx] += 1; }
+                    if(tIdx !== -1) { matrix[aIdx][tIdx] += 1; matrix[tIdx][aIdx] += 1; }
+                });
+                
+                if(cIdx !== -1 && tIdx !== -1) {
+                    matrix[cIdx][tIdx] += 1; matrix[tIdx][cIdx] += 1;
+                }
+            });
+            
+            const typeOrder = { "Polymath": 1, "Area": 2, "Country": 3, "Period": 4 };
+            const orderedNodes = [...nodes].map((n, i) => ({...n, originalIndex: i})).sort((a, b) => typeOrder[a.type] !== typeOrder[b.type] ? typeOrder[a.type] - typeOrder[b.type] : a.name.localeCompare(b.name));
+            const orderedMatrix = Array.from({length: nodes.length}, () => new Array(nodes.length).fill(0));
+            for(let i=0; i<orderedNodes.length; i++) for(let j=0; j<orderedNodes.length; j++) orderedMatrix[i][j] = matrix[orderedNodes[i].originalIndex][orderedNodes[j].originalIndex];
+            
+            const chord = d3.chord().padAngle(0.01).sortSubgroups(d3.descending)(orderedMatrix);
+            const arc = d3.arc().innerRadius(innerRadius).outerRadius(outerRadius), ribbon = d3.ribbon().radius(innerRadius - 2);
+            const group = svg.append("g").selectAll("g").data(chord.groups).join("g");
+            
+            group.append("path").attr("fill", d => typeColors[orderedNodes[d.index].type]).attr("d", arc)
+                .on("mouseover", function(event, d) { d3.selectAll(".grand-ribbon").style("opacity", r => r.source.index===d.index || r.target.index===d.index ? 0.8 : 0.05); d3.select(this).style("opacity", 1); })
+                .on("mouseout", function() { d3.selectAll(".grand-ribbon").style("opacity", 0.4); });
+                
+            group.append("text").each(d => { d.angle = (d.startAngle + d.endAngle) / 2; }).attr("dy", "0.35em")
+                .attr("transform", d => `rotate(${(d.angle * 180 / Math.PI - 90)}) translate(${outerRadius + 10}) ${d.angle > Math.PI ? "rotate(180)" : ""}`)
+                .attr("text-anchor", d => d.angle > Math.PI ? "end" : "start").text(d => orderedNodes[d.index].name).style("font-size", d => orderedNodes[d.index].type === 'Polymath' ? "10px" : "9px").style("fill", d => typeColors[orderedNodes[d.index].type]);
+                
+            svg.append("g").attr("fill-opacity", 0.4).selectAll("path").data(chord).join("path").attr("class", "grand-ribbon").attr("d", ribbon)
+                .attr("fill", d => {
+                    const s = orderedNodes[d.source.index].type;
+                    const t = orderedNodes[d.target.index].type;
+                    if(s === 'Polymath' || t === 'Polymath') return typeColors['Polymath'];
+                    if(s === 'Area' || t === 'Area') return typeColors['Area'];
+                    return typeColors[s];
+                })
+                .style("mix-blend-mode", "screen").on("mousemove", function(event, d) {
+                    d3.select(this).style("opacity", 0.9);
+                    tooltip.html(`<div class="badge">Connection</div><h3>${orderedNodes[d.source.index].name} ↔ ${orderedNodes[d.target.index].name}</h3>`).style("left", (event.pageX+15)+"px").style("top", (event.pageY+15)+"px").style("opacity", 1);
+                }).on("mouseout", function() { d3.select(this).style("opacity", 0.4); tooltip.style("opacity", 0); })
+                .attr("transform", "scale(0)").transition().duration(800).attr("transform", "scale(1)");
+        }
+
+        function drawPolymathsChart() {
+            const polymaths = [], areasMap = new Map();
+            currentData.forEach(row => {
+                if(!row["Name of the Polymath"]) return;
+                polymaths.push(row["Name of the Polymath"]);
+                areasMap.set(row["Name of the Polymath"], new Set(row["Areas of Knowledge"].split(",").map(a => a.trim())));
+            });
+            polymaths.sort();
+            const color = d3.scaleOrdinal().domain(polymaths).range(getColors(polymaths.length));
+            const matrix = Array.from({length: polymaths.length}, () => new Array(polymaths.length).fill(0)), edgeData = {}; 
+            for(let i=0; i<polymaths.length; i++) {
+                for(let j=i+1; j<polymaths.length; j++) {
+                    const intersection = [...areasMap.get(polymaths[i])].filter(x => areasMap.get(polymaths[j]).has(x));
+                    if(intersection.length > 0) {
+                        matrix[i][j] = matrix[j][i] = intersection.length;
+                        edgeData[`${i}-${j}`] = edgeData[`${j}-${i}`] = intersection;
+                    }
+                }
+            }
+            drawChord(matrix, polymaths, color, (event, d, nodes) => {
+                const sharedAreas = edgeData[`${d.source.index}-${d.target.index}`] || [];
+                tooltip.html(`<div class="badge" style="background:#a855f7">Polymath Link</div><h3>${nodes[d.source.index]} ↔ ${nodes[d.target.index]}</h3><p style="margin-bottom:0.5rem; color:#94a3b8">Shared ${sharedAreas.length} knowledge areas:</p><ul>${sharedAreas.map(a => `<li>${a}</li>`).join("")}</ul>`).style("left", (event.pageX + 15) + "px").style("top", (event.pageY + 15) + "px").style("opacity", 1);
+            });
+        }
+
+        function drawCountriesChart() {
+            const countryPolymaths = new Map();
+            currentData.forEach(row => {
+                if(!row["Country of Origin"] || !row["Name of the Polymath"] || !row["Areas of Knowledge"]) return;
+                const areas = row["Areas of Knowledge"].split(",").map(a => a.trim());
+                row["Country of Origin"].split("/").map(c => c.trim()).forEach(c => {
+                    if(!countryPolymaths.has(c)) countryPolymaths.set(c, []);
+                    countryPolymaths.get(c).push({ name: row["Name of the Polymath"], areas: new Set(areas) });
+                });
+            });
+            const countries = Array.from(countryPolymaths.keys()).sort(), color = d3.scaleOrdinal().domain(countries).range(getColors(countries.length));
+            const matrix = Array.from({length: countries.length}, () => new Array(countries.length).fill(0)), edgeData = {}; 
+            for(let i=0; i<countries.length; i++) {
+                for(let j=i+1; j<countries.length; j++) {
+                    const list1 = countryPolymaths.get(countries[i]), list2 = countryPolymaths.get(countries[j]);
+                    let weight = 0; const sharedDetails = [], areasInC1 = new Set(), areasInC2 = new Set();
+                    list1.forEach(p => p.areas.forEach(a => areasInC1.add(a))); list2.forEach(p => p.areas.forEach(a => areasInC2.add(a)));
+                    const sharedAreas = [...areasInC1].filter(x => areasInC2.has(x));
+                    sharedAreas.forEach(area => {
+                        const uniquePolymaths = new Set([...list1.filter(p=>p.areas.has(area)).map(p=>p.name), ...list2.filter(p=>p.areas.has(area)).map(p=>p.name)]);
+                        weight += uniquePolymaths.size;
+                        sharedDetails.push(`${area} (${uniquePolymaths.size} polymaths)`);
+                    });
+                    if(weight > 0) {
+                        matrix[i][j] = matrix[j][i] = weight;
+                        edgeData[`${i}-${j}`] = edgeData[`${j}-${i}`] = sharedDetails;
+                    }
+                }
+            }
+            drawChord(matrix, countries, color, (event, d, nodes) => {
+                const details = edgeData[`${d.source.index}-${d.target.index}`] || [];
+                tooltip.html(`<div class="badge" style="background:#f43f5e">Country Link</div><h3>${nodes[d.source.index]} ↔ ${nodes[d.target.index]}</h3><p style="margin-bottom:0.5rem; color:#94a3b8">Connected via Knowledge Areas:</p><ul>${details.map(x => `<li>${x}</li>`).join("")}</ul>`).style("left", (event.pageX + 15) + "px").style("top", (event.pageY + 15) + "px").style("opacity", 1);
+            });
+        }
+    </script>
+</body>
+</html>
